@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, process::Command};
 
 use chrono::prelude::*;
 use serde::Serialize;
@@ -10,22 +10,31 @@ mod datafeed;
 mod storage;
 
 fn main() {
-    let datafeed = datafeed::read("data/20201215/15/20201215150154.json").unwrap();
-    println!("{} pilots", datafeed.pilots.len());
-    println!("{:?}", datafeed.pilots[350]);
-
     let mut flight_storage = FlightStorage::new();
 
-    for entry in WalkDir::new("data/20201215")
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .into_iter()
-        .filter(|entry| entry.file_type().is_file())
-    {
-        println!("{:?}", entry.path());
-        let datafeed = datafeed::read(entry.path()).unwrap();
-        flight_storage.append(datafeed);
+    for compressed in WalkDir::new("data").sort_by(|a, b| a.file_name().cmp(b.file_name())) {
+        let compressed = compressed.unwrap();
+        if compressed.file_type().is_dir() {
+            continue;
+        }
+        Command::new("./extract.sh")
+            .arg(dbg!(&compressed.path()))
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
+
+        for entry in WalkDir::new("temp")
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .filter(|entry| entry.file_type().is_file())
+        {
+            println!("{:?}", entry.path());
+            let datafeed = datafeed::read(entry.path()).unwrap();
+            flight_storage.append(datafeed);
+        }
     }
 
     /*
