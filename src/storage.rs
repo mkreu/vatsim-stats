@@ -62,6 +62,13 @@ impl FlightStorage {
         }
         self.prev_gs = cur_gs;
     }
+    pub fn flights(&self) -> impl Iterator<Item = Flight<'_>> {
+        self.flights.iter().map(|(key, data)| Flight {
+            callsign: &key.0,
+            departure: &data.departure,
+            arrival: &data.arrival,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -72,4 +79,10 @@ struct FlightData {
     arrival: String,
     departure_time: Option<DateTime<Utc>>,
     arrival_time: Option<DateTime<Utc>>,
+}
+#[derive(Debug, Clone)]
+pub struct Flight<'a> {
+    pub callsign: &'a str,
+    pub departure: &'a str,
+    pub arrival: &'a str,
 }

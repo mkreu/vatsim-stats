@@ -34,7 +34,7 @@ fn main() {
 
     fs::write(
         "storage/flights.ron",
-        ron::ser::to_string(&flight_storage).unwrap(),
+        ron::to_string(&flight_storage).unwrap(),
     )
     .unwrap();
 }
