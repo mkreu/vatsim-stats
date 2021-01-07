@@ -45,3 +45,17 @@ pub enum DatafeedReadError {
 pub fn read(path: impl AsRef<Path>) -> Result<Datafeed, DatafeedReadError> {
     Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
 }
+
+#[derive(Error, Debug)]
+pub enum DatafeedDownloadError {
+    #[error("File Error")]
+    IOError(#[from] io::Error),
+    #[error("Reqwest Error")]
+    DeserializationError(#[from] reqwest::Error),
+}
+
+static DATAFEED_URL: &str = "https://data.vatsim.net/v3/vatsim-data.json"; //TODO get this properly from the status file
+
+pub async fn download() -> Result<Datafeed, DatafeedDownloadError> {
+    Ok(reqwest::get(DATAFEED_URL).await?.json::<Datafeed>().await?)
+}

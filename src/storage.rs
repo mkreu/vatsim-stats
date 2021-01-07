@@ -69,6 +69,9 @@ impl FlightStorage {
             arrival: &data.arrival,
         })
     }
+    pub fn last_ts(&self) -> DateTime<Utc> {
+        self.last_ts
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
