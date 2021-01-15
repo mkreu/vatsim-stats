@@ -4,6 +4,7 @@ use crate::{
 };
 use chrono::prelude::*;
 use log::{info, warn};
+use serde::Deserialize;
 use std::time::Duration;
 use std::{convert::Infallible, fs, sync::Arc};
 use tokio::sync::RwLock;
@@ -42,22 +43,60 @@ pub async fn run(data_provider: impl DataProvider) -> anyhow::Result<()> {
     tokio::spawn(downloader(flight_storage.clone()));
 
     let with_flights = warp::any().map(move || flight_storage.clone());
-    let hello = warp::path!("flights" / String / String)
+    let hello = warp::path::path("flights")
+        .and(warp::path::end())
+        .and(warp::query())
         .and(with_flights)
-        .and_then(|dep, arr, flights: Arc<RwLock<FlightStorage>>| async move {
-            let result: Result<String, Infallible> = Ok(flights
-                .read()
-                .await
-                .flights()
-                .filter(|f| f.departure == dep && f.arrival == arr)
-                .map(|f| format!("{}", f.callsign))
-                .collect::<Vec<String>>()
-                .join("\n"));
-            result
-        });
+        .and_then(
+            |query: Query, flights: Arc<RwLock<FlightStorage>>| async move {
+                let result: Result<String, Infallible> = Ok(flights
+                    .read()
+                    .await
+                    .flights()
+                    .filter(|f| match (&query.arrival_apt, &query.departure_apt) {
+                        (Some(ref arr), Some(ref dep)) if arr == dep => {
+                            f.arrival == arr || f.departure == dep
+                        }
+                        (Some(ref arr), Some(ref dep)) => f.arrival == arr && f.departure == dep,
+                        (Some(ref arr), None) => f.arrival == arr,
+                        (None, Some(ref dep)) => f.departure == dep,
+                        (None, None) => false,
+                    })
+                    .filter(|f| {
+                        f.arrival_time
+                            .filter(|time| {
+                                time >= &query.arrival_time_from.unwrap_or(*time)
+                                    && time <= &query.arrival_time_to.unwrap_or(*time)
+                            })
+                            .is_some()
+                    })
+                    .filter(|f| {
+                        f.departure_time
+                            .filter(|time| {
+                                time >= &query.departure_time_from.unwrap_or(*time)
+                                    && time <= &query.departure_time_to.unwrap_or(*time)
+                            })
+                            .is_some()
+                    })
+                    .map(|f| format!("{}", serde_json::to_string(&f).unwrap()))
+                    .collect::<Vec<String>>()
+                    .join("\n"));
+                result
+            },
+        );
 
     warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct Query {
+    arrival_apt: Option<String>,
+    departure_apt: Option<String>,
+    arrival_time_from: Option<DateTime<Utc>>,
+    arrival_time_to: Option<DateTime<Utc>>,
+    departure_time_from: Option<DateTime<Utc>>,
+    departure_time_to: Option<DateTime<Utc>>,
 }
 
 pub trait DataProvider {

@@ -67,6 +67,8 @@ impl FlightStorage {
             callsign: &key.0,
             departure: &data.departure,
             arrival: &data.arrival,
+            departure_time: &data.departure_time,
+            arrival_time: &data.arrival_time,
         })
     }
     pub fn last_ts(&self) -> DateTime<Utc> {
@@ -83,9 +85,11 @@ struct FlightData {
     departure_time: Option<DateTime<Utc>>,
     arrival_time: Option<DateTime<Utc>>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Flight<'a> {
     pub callsign: &'a str,
     pub departure: &'a str,
     pub arrival: &'a str,
+    pub departure_time: &'a Option<DateTime<Utc>>,
+    pub arrival_time: &'a Option<DateTime<Utc>>,
 }
