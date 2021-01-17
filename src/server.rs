@@ -1,14 +1,14 @@
 use crate::{
     datafeed::{self, Datafeed},
-    storage::FlightStorage,
+    storage::{Flight, FlightStorage},
 };
 use chrono::prelude::*;
 use log::{info, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use std::{convert::Infallible, fs, sync::Arc};
 use tokio::sync::RwLock;
-use warp::Filter;
+use warp::{reply::Json, Filter};
 
 async fn downloader(storage: Arc<RwLock<FlightStorage>>) {
     loop {
@@ -43,62 +43,76 @@ pub async fn run(data_provider: impl DataProvider) -> anyhow::Result<()> {
     tokio::spawn(downloader(flight_storage.clone()));
 
     let with_flights = warp::any().map(move || flight_storage.clone());
-    let hello = warp::path::path("flights")
+    let flights_airport = warp::path!("flights" / "airport")
         .and(warp::path::end())
         .and(warp::query())
         .and(with_flights)
-        .and_then(
-            |query: Query, flights: Arc<RwLock<FlightStorage>>| async move {
-                let result: Result<String, Infallible> = Ok(flights
-                    .read()
-                    .await
-                    .flights()
-                    .filter(|f| match (&query.arrival_apt, &query.departure_apt) {
-                        (Some(ref arr), Some(ref dep)) if arr == dep => {
-                            f.arrival == arr || f.departure == dep
-                        }
-                        (Some(ref arr), Some(ref dep)) => f.arrival == arr && f.departure == dep,
-                        (Some(ref arr), None) => f.arrival == arr,
-                        (None, Some(ref dep)) => f.departure == dep,
-                        (None, None) => false,
-                    })
-                    .filter(|f| {
-                        f.arrival_time
-                            .filter(|time| {
-                                time >= &query.arrival_time_from.unwrap_or(*time)
-                                    && time <= &query.arrival_time_to.unwrap_or(*time)
-                            })
-                            .is_some()
-                    })
-                    .filter(|f| {
-                        f.departure_time
-                            .filter(|time| {
-                                time >= &query.departure_time_from.unwrap_or(*time)
-                                    && time <= &query.departure_time_to.unwrap_or(*time)
-                            })
-                            .is_some()
-                    })
-                    .map(|f| format!("{}", serde_json::to_string(&f).unwrap()))
-                    .collect::<Vec<String>>()
-                    .join("\n"));
-                result
-            },
-        );
+        .and_then(|query: AirportQuery, flights: Arc<RwLock<FlightStorage>>| {
+            flights_airport(query, flights)
+        });
 
-    warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
+    warp::serve(flights_airport)
+        .run(([127, 0, 0, 1], 3030))
+        .await;
     Ok(())
 }
 
 #[derive(Deserialize)]
-struct Query {
-    arrival_apt: Option<String>,
-    departure_apt: Option<String>,
-    arrival_time_from: Option<DateTime<Utc>>,
-    arrival_time_to: Option<DateTime<Utc>>,
-    departure_time_from: Option<DateTime<Utc>>,
-    departure_time_to: Option<DateTime<Utc>>,
+struct AirportQuery {
+    icao: String,
+    since: DateTime<Utc>,
+    until: DateTime<Utc>,
 }
 
 pub trait DataProvider {
     fn data_since(&self, time: DateTime<Utc>) -> Box<dyn Iterator<Item = Datafeed>>;
+}
+
+async fn flights_airport(
+    query: AirportQuery,
+    flights: Arc<RwLock<FlightStorage>>,
+) -> Result<Json, Infallible> {
+    let flights = flights.read().await;
+    let departures = flights
+        .flights()
+        .filter(|flight| flight.departure == query.icao)
+        .filter(|flight| {
+            flight
+                .departure_time
+                .filter(|time| time >= &query.since)
+                .is_some()
+        })
+        .filter(|flight| {
+            flight
+                .departure_time
+                .filter(|time| time <= &query.until)
+                .is_some()
+        })
+        .collect();
+    let arrivals = flights
+        .flights()
+        .filter(|flight| flight.arrival == query.icao)
+        .filter(|flight| {
+            flight
+                .arrival_time
+                .filter(|time| time >= &query.since)
+                .is_some()
+        })
+        .filter(|flight| {
+            flight
+                .arrival_time
+                .filter(|time| time <= &query.until)
+                .is_some()
+        })
+        .collect();
+    Ok(warp::reply::json(&AirportFlights {
+        departures,
+        arrivals,
+    }))
+}
+
+#[derive(Serialize)]
+struct AirportFlights<'a> {
+    departures: Vec<Flight<'a>>,
+    arrivals: Vec<Flight<'a>>,
 }
