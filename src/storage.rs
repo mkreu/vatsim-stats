@@ -12,6 +12,12 @@ pub struct FlightStorage {
     prev_gs: HashMap<FlightKey, usize>,
 }
 
+impl Default for FlightStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FlightStorage {
     pub fn new() -> Self {
         Self {
