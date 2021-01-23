@@ -1,37 +1,11 @@
-use std::{fs, process::Command};
+use std::fs;
 
-use walkdir::WalkDir;
-
-use vatsim_stats::{datafeed, storage::FlightStorage};
+use vatsim_stats::{importer, storage::FlightStorage};
 
 fn main() {
+    pretty_env_logger::init();
     let mut flight_storage = FlightStorage::new();
-
-    for compressed in WalkDir::new("data").sort_by(|a, b| a.file_name().cmp(b.file_name())) {
-        let compressed = compressed.unwrap();
-        if compressed.file_type().is_dir() {
-            continue;
-        }
-        Command::new("./extract.sh")
-            .arg(dbg!(&compressed.path()))
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
-
-        for entry in WalkDir::new("temp")
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .into_iter()
-            .filter(|entry| entry.file_type().is_file())
-        {
-            println!("{:?}", entry.path());
-            let datafeed = datafeed::read(entry.path()).unwrap();
-            flight_storage.append(datafeed);
-        }
-    }
-
+    importer::import(&mut flight_storage, "data").expect("failed to import");
     fs::write(
         "storage/flights.ron",
         ron::to_string(&flight_storage).unwrap(),

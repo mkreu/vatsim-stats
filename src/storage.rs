@@ -30,6 +30,7 @@ impl FlightStorage {
         if datafeed.general.update_timestamp <= self.last_ts {
             panic!("you can only append timestamps in monotone increasing order")
         }
+        self.last_ts = datafeed.general.update_timestamp;
         let mut cur_gs = HashMap::new();
         for (cs, fp, gs) in datafeed.pilots.into_iter().filter_map(|p| {
             let Pilot {
