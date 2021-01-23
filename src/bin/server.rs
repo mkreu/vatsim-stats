@@ -3,7 +3,7 @@ use std::{fs, sync::Arc, time::Duration};
 use log::{info, warn};
 use tokio::sync::RwLock;
 use tokio::time;
-use vatsim_stats::{datafeed, server, storage::FlightStorage};
+use vatsim_stats::{server, storage::FlightStorage, vatdl};
 
 #[tokio::main]
 async fn main() {
@@ -15,11 +15,12 @@ async fn main() {
     tokio::spawn(downloader(flight_storage.clone()));
     server::run(flight_storage).await.unwrap();
 }
+
 async fn downloader(storage: Arc<RwLock<FlightStorage>>) {
-    let mut interval = time::interval(Duration::from_secs(30));
+    let mut interval = time::interval(Duration::from_secs(60));
     loop {
         interval.tick().await;
-        match datafeed::download().await {
+        match vatdl::run_download().await {
             Ok(datafeed) => {
                 let mut guard = storage.write().await;
                 info!(
