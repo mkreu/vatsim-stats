@@ -8,18 +8,17 @@ use walkdir::WalkDir;
 const COMPRESSED_FOLDER: &str = "compressed";
 const DOWNLOAD_FOLDER: &str = "download";
 
-pub fn import(
-    flight_storage: &mut FlightStorage,
-    data_path: impl AsRef<Path>,
-) -> anyhow::Result<()> {
-    import_since(flight_storage, data_path, Utc.timestamp(0, 0))
+pub fn import_new(data_path: impl AsRef<Path>) -> anyhow::Result<FlightStorage> {
+    let mut flight_storage = FlightStorage::default();
+    import_append(&mut flight_storage, data_path)?;
+    Ok(flight_storage)
 }
 
-pub fn import_since(
+pub fn import_append(
     flight_storage: &mut FlightStorage,
     data_path: impl AsRef<Path>,
-    since: DateTime<Utc>,
 ) -> anyhow::Result<()> {
+    let since = flight_storage.last_ts().clone();
     for compressed in WalkDir::new(data_path.as_ref().join(COMPRESSED_FOLDER))
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()

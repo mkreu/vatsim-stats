@@ -1,12 +1,12 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
-use tokio::fs;
+use log::{error, info};
+use tokio::{fs, sync::RwLock, time};
 
-use log::{info, warn};
-use tokio::sync::RwLock;
-use tokio::time;
-use vatsim_stats::{importer, server, storage::FlightStorage, vatdl};
+use vatsim_stats::{importer, server, storage::FlightStorage};
+
+const IMPORT_INTERVAL: u64 = 10 * 60;
 
 #[tokio::main]
 async fn main() {
@@ -18,41 +18,38 @@ async fn main() {
         .unwrap_or_default();
 
     info!("importing data...");
-    let last_ts = flight_storage.last_ts().clone();
-    importer::import_since(&mut flight_storage, "data", last_ts).expect("failed to import data");
+    importer::import_append(&mut flight_storage, "data").expect("failed to import data");
+    if let Err(err) = fs::write(
+        "storage/flights.ron",
+        ron::to_string(&flight_storage).unwrap(),
+    )
+    .await
+    {
+        error!("could not save storage: {}", err)
+    } else {
+        info!("saved storage");
+    }
 
     let flight_storage = Arc::new(RwLock::new(flight_storage));
     info!("flight data loaded");
 
-    tokio::spawn(downloader(flight_storage.clone()));
+    tokio::spawn(import_task(flight_storage.clone()));
     server::run(flight_storage).await.unwrap();
 }
 
-async fn downloader(storage: Arc<RwLock<FlightStorage>>) {
-    let mut interval = time::interval(Duration::from_secs(60));
+async fn import_task(storage: Arc<RwLock<FlightStorage>>) {
+    let mut interval = time::interval(Duration::from_secs(IMPORT_INTERVAL));
     loop {
         interval.tick().await;
-        match vatdl::run_download().await {
-            Ok(datafeed) => {
-                let mut guard = storage.write().await;
-                info!(
-                    "downloaded datafeed with time: {}",
-                    datafeed.general.update_timestamp
-                );
-                if datafeed.general.update_timestamp > guard.last_ts() {
-                    guard.append(datafeed);
-                    if let Err(err) =
-                        fs::write("storage/flights.ron", ron::to_string(&*guard).unwrap()).await
-                    {
-                        warn!("could not save storage: {}", err)
-                    } else {
-                        info!("appended datafeed and saved storage to file")
-                    }
-                }
-            }
-            Err(err) => {
-                warn!("error downloading datafeed: {}", err)
-            }
+        let mut guard = storage.write().await;
+        if let Err(err) = importer::import_append(&mut *guard, "data") {
+            error!("could not append to storage: {}", err);
+            continue;
+        }
+        if let Err(err) = fs::write("storage/flights.ron", ron::to_string(&*guard).unwrap()).await {
+            error!("could not save storage: {}", err)
+        } else {
+            info!("appended and saved storage");
         }
     }
 }
