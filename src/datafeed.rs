@@ -25,7 +25,7 @@ pub struct Pilot {
     pub callsign: String,
     pub flight_plan: Option<Flightplan>,
     pub logon_time: DateTime<Utc>,
-    pub groundspeed: usize,
+    pub groundspeed: isize,
 }
 
 #[derive(Debug, Deserialize)]

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct FlightStorage {
     last_ts: DateTime<Utc>,
     flights: HashMap<FlightKey, FlightData>,
-    prev_gs: HashMap<FlightKey, usize>,
+    prev_gs: HashMap<FlightKey, isize>,
 }
 
 impl Default for FlightStorage {
