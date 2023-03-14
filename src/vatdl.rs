@@ -133,9 +133,9 @@ async fn compress_day(date: &str) -> anyhow::Result<()> {
     }
     let child = Command::new("tar")
         .arg("-caf")
-        .arg(format!("compressed/{}.tar.xz", date))
+        .arg(format!("{COMPRESSED_DIR}/{date}.tar.xz"))
         .arg("-C")
-        .arg("download")
+        .arg(DOWNLOAD_DIR)
         .arg(date)
         .spawn();
     // Await until the future (and the command) completes
