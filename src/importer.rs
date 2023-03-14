@@ -18,10 +18,9 @@ pub fn import_append(
     flight_storage: &mut FlightStorage,
     data_path: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
-    let since = flight_storage.last_ts().clone();
+    let since = flight_storage.last_ts();
     for compressed in WalkDir::new(data_path.as_ref().join(COMPRESSED_FOLDER))
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
-        .into_iter()
         .into_iter()
         .collect::<Result<Vec<_>, _>>()
         .context("compressed dir entry error")?
@@ -31,7 +30,7 @@ pub fn import_append(
             continue;
         }
         if Utc
-            .from_utc_date(
+            .from_utc_datetime(
                 &NaiveDate::parse_from_str(
                     compressed
                         .file_name()
@@ -44,9 +43,10 @@ pub fn import_append(
                         "failed to parse file name as date: {}",
                         compressed.file_name().to_string_lossy()
                     )
-                })?,
+                })?
+
+            .and_hms_opt(0, 0, 0).unwrap(),
             )
-            .and_hms(0, 0, 0)
             <= since
         {
             continue;
@@ -54,7 +54,7 @@ pub fn import_append(
 
         info!("importing {}", compressed.path().to_string_lossy());
         Command::new("./extract.sh")
-            .arg(&compressed.path())
+            .arg(compressed.path())
             .spawn()?
             .wait()?;
 

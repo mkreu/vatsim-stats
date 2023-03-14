@@ -30,7 +30,7 @@ pub async fn run_download() -> anyhow::Result<Datafeed> {
         .chain(urls.iter())
         .chain(urls.iter())
         .take(3)
-        .map(|url| download_datafeed(&client, &url));
+        .map(|url| download_datafeed(&client, url));
 
     let mut datafeed_res: anyhow::Result<Datafeed> = Err(anyhow!("no datafeed url exists"));
     for dl_req in dl_results {
@@ -57,13 +57,13 @@ pub async fn run_download() -> anyhow::Result<Datafeed> {
         info!("Waiting 5 seconds before next download");
         tokio::time::sleep(StdDuration::from_secs(5)).await;
     }
-    Ok(datafeed_res?)
+    datafeed_res
 }
 
 pub async fn run_compress() -> anyhow::Result<()> {
     //create dir for compressed files if it does not exist
     fs::create_dir_all(COMPRESSED_DIR).await?;
-    let today = Utc::today().format("%Y%m%d").to_string();
+    let today = Utc::now().format("%Y%m%d").to_string();
 
     let mut dirs = fs::read_dir(DOWNLOAD_DIR).await?;
     while let Some(dir_entry) = dirs.next_entry().await? {
@@ -83,7 +83,7 @@ pub async fn run_compress() -> anyhow::Result<()> {
 }
 
 async fn write_file(datafeed: &str) -> Result<(), Box<dyn Error>> {
-    let ts = extract_timestamp(&datafeed)?;
+    let ts = extract_timestamp(datafeed)?;
     info!("Timestamp: {}", ts);
     let path = timestamp_to_path(&ts);
     fs::create_dir_all(

@@ -42,7 +42,7 @@ async fn import_task(storage: Arc<RwLock<FlightStorage>>) {
     loop {
         interval.tick().await;
         let mut guard = storage.write().await;
-        if let Err(err) = importer::import_append(&mut *guard, "data") {
+        if let Err(err) = importer::import_append(&mut guard, "data") {
             error!("could not append to storage: {}", err);
             continue;
         }

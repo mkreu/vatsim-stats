@@ -21,7 +21,7 @@ impl Default for FlightStorage {
 impl FlightStorage {
     pub fn new() -> Self {
         Self {
-            last_ts: Utc.timestamp(0, 0),
+            last_ts: Utc.timestamp_opt(0, 0).unwrap(),
             flights: HashMap::new(),
             prev_gs: HashMap::new(),
         }
@@ -53,12 +53,12 @@ impl FlightStorage {
                 });
 
             match self.prev_gs.get(&cs) {
-                Some(ref gs_old) if **gs_old < 60 => {
+                Some(gs_old) if *gs_old < 60 => {
                     if gs >= 60 {
                         entry.departure_time = Some(datafeed.general.update_timestamp);
                     }
                 }
-                Some(ref gs_old) if **gs_old >= 60 => {
+                Some(gs_old) if *gs_old >= 60 => {
                     if gs < 60 {
                         entry.arrival_time = Some(datafeed.general.update_timestamp);
                     }
